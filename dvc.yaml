@@ -1,0 +1,52 @@
+stages:
+  prepare_boundaries:
+    cmd: python src/data/02_prepare_boundaries.py
+    deps:
+      - data/raw/DH_2011_DCHB_Village_Release_2900.xlsx
+      - data/raw/shrug/shrug-shrid-poly-shp/shrid2_open.shp
+      - src/data/02_prepare_boundaries.py
+    outs:
+      - data/interim/villages_coastal_utm.parquet
+      - data/interim/villages_coastal_wgs84.parquet
+      - data/interim/census_coastal.parquet
+
+  join_health_centres:
+    cmd: python src/data/03_join_health_centres.py
+    deps:
+      - data/raw/geocode_health_centre.csv
+      - data/interim/villages_coastal_utm.parquet
+      - src/data/03_join_health_centres.py
+    outs:
+      - data/interim/features_health_centres.parquet
+
+  join_rain_gauges:
+    cmd: python src/data/04_join_rain_gauges.py
+    deps:
+      - data/raw/70578d25-7ede-426c-8e8e-5c679274a55a.kml
+      - data/interim/villages_coastal_utm.parquet
+      - src/data/04_join_rain_gauges.py
+    outs:
+      - data/interim/features_rain_gauges.parquet
+      - data/interim/ksndmc_gauges_coastal.parquet
+
+  join_shelters_vulnerability:
+    cmd: python src/data/05_join_shelters_and_vulnerability.py
+    deps:
+      - data/raw/IntegratedCoastalVulnerabilityAssessment.pdf
+      - data/interim/villages_coastal_utm.parquet
+      - src/data/05_join_shelters_and_vulnerability.py
+    outs:
+      - data/interim/shelters_table.parquet
+      - data/interim/features_shelters_vulnerability.parquet
+
+  build_master_table:
+    cmd: python src/data/06_build_master_table.py
+    deps:
+      - data/interim/villages_coastal_utm.parquet
+      - data/interim/features_health_centres.parquet
+      - data/interim/features_rain_gauges.parquet
+      - data/interim/features_shelters_vulnerability.parquet
+      - src/data/06_build_master_table.py
+    outs:
+      - data/processed/master_village_preparedness.parquet
+      - data/processed/master_village_preparedness.csv

@@ -1,0 +1,20 @@
+2026-10-22 23:34:05,643 INFO    MainThread:19816 [wandb_init.py:setup_run_log_directory():740] Logging user logs to C:\Users\Kanishk\Desktop\cyclone-preparedness\notebooks\wandb\offline-run-20261022_233405-s73j1tp7\logs\debug.log
+2026-10-22 23:34:05,643 INFO    MainThread:19816 [wandb_init.py:setup_run_log_directory():741] Logging internal logs to C:\Users\Kanishk\Desktop\cyclone-preparedness\notebooks\wandb\offline-run-20261022_233405-s73j1tp7\logs\debug-internal.log
+2026-10-22 23:34:05,643 INFO    MainThread:19816 [wandb_init.py:init():784] calling init triggers
+2026-10-22 23:34:05,643 INFO    MainThread:19816 [wandb_init.py:init():789] wandb.init called with sweep_config: {}
+config: {'model': 'HistGBT', 'split': 'split_70_15_15', 'task': 'regression', 'target': 'preparedness_score', 'n_features': 26, 'train_size': 1315, 'val_size': 0.15, 'test_size': 0.15, 'random_state': 42, '_wandb': {}}
+2026-10-22 23:34:05,643 INFO    MainThread:19816 [wandb_init.py:init():832] starting backend
+2026-10-22 23:34:05,643 INFO    MainThread:19816 [wandb_init.py:init():847] sending inform_init request
+2026-10-22 23:34:05,652 INFO    MainThread:19816 [wandb_init.py:init():852] backend started and connected
+2026-10-22 23:34:05,653 INFO    MainThread:19816 [wandb_init.py:init():922] updated telemetry
+2026-10-22 23:34:05,855 INFO    MainThread:19816 [wandb_init.py:init():940] communicating run to backend with 90.0 second timeout
+2026-10-22 23:34:05,859 INFO    MainThread:19816 [wandb_init.py:init():977] starting run threads in backend
+2026-10-22 23:34:06,194 INFO    MainThread:19816 [wandb_run.py:_console_start():2528] atexit reg
+2026-10-22 23:34:06,194 INFO    MainThread:19816 [wandb_run.py:_redirect():2378] redirect: wrap_raw
+2026-10-22 23:34:06,194 INFO    MainThread:19816 [wandb_run.py:_redirect():2447] Wrapping output streams.
+2026-10-22 23:34:06,195 INFO    MainThread:19816 [wandb_run.py:_redirect():2470] Redirects installed.
+2026-10-22 23:34:06,196 INFO    MainThread:19816 [wandb_init.py:init():1015] run started, returning control to user process
+2026-10-22 23:34:06,999 INFO    MainThread:19816 [wandb_run.py:_finish():2300] finishing run cyclone-preparedness-karnataka/s73j1tp7
+2026-10-22 23:34:07,000 INFO    MainThread:19816 [wandb_run.py:_atexit_cleanup():2495] got exitcode: 0
+2026-10-22 23:34:07,001 INFO    MainThread:19816 [wandb_run.py:_restore():2477] restore
+2026-10-22 23:34:07,001 INFO    MainThread:19816 [wandb_run.py:_restore():2483] restore done

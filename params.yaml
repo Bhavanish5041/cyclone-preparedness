@@ -1,0 +1,23 @@
+crs:
+  utm: "EPSG:32643"
+  wgs84: "EPSG:4326"
+
+districts:
+  - code: 563
+    name: "Uttara Kannada"
+  - code: 569
+    name: "Udupi"
+  - code: 575
+    name: "Dakshina Kannada"
+
+spatial_joins:
+  health_centre_buffer_m: 10000
+  rain_gauge_buffer_m: 20000
+  shelter_buffer_m: 10000
+
+preparedness_weights:
+  medical: 0.25
+  shelters: 0.25
+  infrastructure: 0.20
+  early_warning: 0.15
+  socioeconomic: 0.15
