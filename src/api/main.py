@@ -23,9 +23,13 @@ from fastapi.responses import RedirectResponse
 
 from src.api.schemas import (
     ArchetypeCatalogResponse,
+    DecisionEvaluationListResponse,
+    DecisionSupportEvaluation,
     HealthCheckResponse,
     PrioritizationScenarioRequest,
     PrioritizationScenarioResponse,
+    RankDivergenceItem,
+    RegionalDecisionSummaryResponse,
     ScenarioComparisonRequest,
     ScenarioComparisonResponse,
     UnitDetailResponse,
@@ -224,3 +228,100 @@ def get_archetype_catalog(
 ) -> ArchetypeCatalogResponse:
     """Return descriptive profiles, district distributions, and intervention checklists for all archetypes."""
     return service.get_archetype_catalog()
+
+
+# =============================================================================
+# Milestone 3B: Integrated Decision-Support Endpoints
+# =============================================================================
+
+
+@app.get(
+    "/api/v1/decision-support/summary",
+    response_model=RegionalDecisionSummaryResponse,
+    tags=["Decision Support Engine"],
+    summary="Retrieve regional summary of priority bands, trigger counts, and model concordance",
+)
+def get_regional_decision_summary(
+    service: DecisionSupportService = Depends(get_service),
+) -> RegionalDecisionSummaryResponse:
+    """Return regional aggregation across all 1,879 records in the study area."""
+    return service.get_regional_decision_summary()
+
+
+@app.get(
+    "/api/v1/decision-support/units/{identifier}",
+    response_model=DecisionSupportEvaluation,
+    tags=["Decision Support Engine"],
+    summary="Retrieve full decision-support evaluation and grounded advisories for an administrative unit",
+)
+def evaluate_decision_unit(
+    identifier: str = Path(
+        ...,
+        min_length=1,
+        description="Census PC11 ID (e.g. '608720'), SHRID (e.g. '11-29-569-05522-608720'), or village name",
+        examples=["608720", "Tallur", "Bappalgundi"],
+    ),
+    service: DecisionSupportService = Depends(get_service),
+) -> DecisionSupportEvaluation:
+    """Evaluate a unit's priority band, within-band rank, model stability, and grounded advisories."""
+    try:
+        return service.evaluate_decision_unit(identifier)
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Administrative unit '{identifier}' not found in unified preparedness dataset.",
+        )
+
+
+@app.get(
+    "/api/v1/decision-support/units",
+    response_model=DecisionEvaluationListResponse,
+    tags=["Decision Support Engine"],
+    summary="Retrieve paginated decision evaluations with optional district and priority band filtering",
+)
+def get_decision_units(
+    district: Optional[str] = Query(
+        None,
+        description="Optional filter by district ('Dakshina Kannada', 'Udupi', 'Uttara Kannada')",
+        examples=["Uttara Kannada", "Dakshina Kannada", "Udupi"],
+    ),
+    priority_band: Optional[str] = Query(
+        None,
+        description="Optional filter by priority band ('BAND_1_CRITICAL', 'BAND_2_SPECIALIZED', 'BAND_3_MODERATE', 'BAND_4_ADEQUATE')",
+        examples=["BAND_1_CRITICAL", "BAND_2_SPECIALIZED"],
+    ),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=1879,
+        description="Maximum number of units to return per page",
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Offset index for pagination",
+    ),
+    service: DecisionSupportService = Depends(get_service),
+) -> DecisionEvaluationListResponse:
+    """Retrieve filtered, paginated decision evaluations ranked deterministically by priority."""
+    valid_districts = {"dakshina kannada", "udupi", "uttara kannada"}
+    if district and district.strip().lower() not in valid_districts:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Invalid district '{district}'. Allowed: 'Dakshina Kannada', 'Udupi', 'Uttara Kannada'.",
+        )
+
+    valid_bands = {"BAND_1_CRITICAL", "BAND_2_SPECIALIZED", "BAND_3_MODERATE", "BAND_4_ADEQUATE"}
+    if priority_band and priority_band.strip().upper() not in valid_bands:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Invalid priority_band '{priority_band}'. Allowed: {sorted(valid_bands)}.",
+        )
+
+    return service.get_decision_units(
+        district=district,
+        priority_band=priority_band,
+        limit=limit,
+        offset=offset,
+    )
+

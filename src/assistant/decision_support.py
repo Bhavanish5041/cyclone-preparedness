@@ -20,10 +20,14 @@ from scipy.stats import kendalltau, spearmanr
 from src.api.schemas import (
     ArchetypeCatalogResponse,
     ArchetypeSummary,
+    DecisionEvaluationListResponse,
+    DecisionSupportEvaluation,
     HealthCheckResponse,
+    InterventionItem,
     PrioritizationScenarioRequest,
     PrioritizationScenarioResponse,
     RankDivergenceItem,
+    RegionalDecisionSummaryResponse,
     ScenarioComparisonRequest,
     ScenarioComparisonResponse,
     UnitDetailResponse,
@@ -37,6 +41,11 @@ from src.features.prioritization import (
     compute_healthcare_deficit_dimension,
     compute_infrastructure_deficit_dimension,
 )
+from src.integration.decision_matrix import (
+    build_unit_evaluation,
+    compute_priority_bands_and_ranking,
+    get_regional_decision_summary,
+)
 from src.models.clustering import (
     ARCHETYPE_DISCLAIMER,
     ARCHETYPE_LABELS_K4,
@@ -46,14 +55,22 @@ from src.models.clustering import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_DATA_PATH = Path("data/processed/coastal_vulnerability_archetypes.parquet")
+UNIFIED_V2_DATA_PATH = Path("data/processed/unified_village_preparedness_v2.parquet")
 
 
 class DecisionSupportService:
     """Singleton/service class encapsulating decision support operations on processed data."""
 
-    def __init__(self, data_path: Optional[Union[str, Path]] = None) -> None:
+    def __init__(
+        self,
+        data_path: Optional[Union[str, Path]] = None,
+        unified_data_path: Optional[Union[str, Path]] = None,
+    ) -> None:
         self.data_path = Path(data_path) if data_path else DEFAULT_DATA_PATH
+        self.unified_data_path = Path(unified_data_path) if unified_data_path else UNIFIED_V2_DATA_PATH
         self._df: Optional[gpd.GeoDataFrame] = None
+        self._unified_df: Optional[pd.DataFrame] = None
+        self._ranked_df: Optional[pd.DataFrame] = None
         self._load_data()
 
     def _load_data(self) -> None:
@@ -70,6 +87,29 @@ class DecisionSupportService:
         if self._df is None:
             self._load_data()
         return self._df  # type: ignore
+
+    def _load_unified_data(self) -> None:
+        """Load and compute priority bands and ranking for unified v2 dataset."""
+        if not self.unified_data_path.exists():
+            raise FileNotFoundError(f"Unified dataset not found at {self.unified_data_path}")
+
+        logger.info(f"Loading unified decision support dataset from {self.unified_data_path}...")
+        raw_df = pd.read_parquet(self.unified_data_path)
+        self._unified_df = raw_df
+        self._ranked_df = compute_priority_bands_and_ranking(raw_df)
+        logger.info(f"Successfully ranked {len(self._ranked_df)} units in DecisionSupportService.")
+
+    @property
+    def unified_df(self) -> pd.DataFrame:
+        if self._unified_df is None:
+            self._load_unified_data()
+        return self._unified_df  # type: ignore
+
+    @property
+    def ranked_df(self) -> pd.DataFrame:
+        if self._ranked_df is None:
+            self._load_unified_data()
+        return self._ranked_df  # type: ignore
 
     def get_health_status(self) -> HealthCheckResponse:
         """Return system health, record counts, and dataset metadata."""
@@ -413,3 +453,75 @@ class DecisionSupportService:
             ),
             clustering_disclaimer=ARCHETYPE_DISCLAIMER,
         )
+
+    def evaluate_decision_unit(self, identifier: str) -> DecisionSupportEvaluation:
+        """Retrieve full decision support evaluation for an administrative unit in the 1,879 dataset.
+
+        Args:
+            identifier: Exact match for pc11_id, shrid2, or village_name.
+
+        Returns:
+            DecisionSupportEvaluation model.
+
+        Raises:
+            KeyError: If unit is not found in the unified dataset.
+        """
+        clean_id = identifier.strip()
+        df = self.ranked_df
+        match = df[
+            (df["pc11_id"] == clean_id)
+            | (df["shrid2"] == clean_id)
+            | (df["village_name"].str.lower() == clean_id.lower())
+        ]
+
+        if match.empty:
+            raise KeyError(f"Administrative unit '{identifier}' not found in unified preparedness dataset.")
+
+        row = match.iloc[0]
+        return build_unit_evaluation(row)
+
+    def get_decision_units(
+        self,
+        district: Optional[str] = None,
+        priority_band: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> DecisionEvaluationListResponse:
+        """Retrieve paginated decision evaluations with optional district and priority band filtering.
+
+        Args:
+            district: Optional district filter ('Dakshina Kannada', 'Udupi', 'Uttara Kannada').
+            priority_band: Optional priority band filter ('BAND_1_CRITICAL', 'BAND_2_SPECIALIZED', etc.).
+            limit: Page size limit (default 50).
+            offset: Offset index (default 0).
+
+        Returns:
+            DecisionEvaluationListResponse model.
+        """
+        df = self.ranked_df
+        filtered = df
+
+        if district:
+            filtered = filtered[filtered["district_name"].str.lower() == district.strip().lower()]
+
+        if priority_band:
+            filtered = filtered[filtered["priority_band"].str.upper() == priority_band.strip().upper()]
+
+        total_evaluated = len(df)
+        total_matching = len(filtered)
+
+        slice_df = filtered.iloc[offset : offset + limit]
+        evaluations = [build_unit_evaluation(row) for _, row in slice_df.iterrows()]
+
+        return DecisionEvaluationListResponse(
+            total_evaluated=total_evaluated,
+            total_matching=total_matching,
+            limit=limit,
+            offset=offset,
+            units=evaluations,
+        )
+
+    def get_regional_decision_summary(self) -> RegionalDecisionSummaryResponse:
+        """Return regional aggregation across all 1,879 records."""
+        return get_regional_decision_summary(self.ranked_df)
+

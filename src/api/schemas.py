@@ -204,3 +204,117 @@ class ArchetypeCatalogResponse(BaseModel):
     archetypes: List[ArchetypeSummary]
     clustering_methodology: str
     clustering_disclaimer: str
+
+
+# =============================================================================
+# Milestone 3B: Integrated Decision-Support Engine Schemas
+# =============================================================================
+
+
+class InterventionItem(BaseModel):
+    """Specific evidence-grounded advisory planning recommendation."""
+
+    directive_id: str = Field(..., description="Unique advisory code (e.g., ADV_1_HOSPITAL_ISOLATION)")
+    advisory_focus: str = Field(..., description="Thematic sector (e.g., Healthcare Transit Isolation)")
+    operational_recommendation: str = Field(
+        ..., description="Actionable advisory verification checklist for local authorities"
+    )
+    lead_coordinating_agency: str = Field(
+        ..., description="Recommended coordinating authority (e.g., Taluk Health Officer, Gram Panchayat)"
+    )
+    advisory_type: str = Field(
+        ..., description="'INDIVIDUAL_EVIDENCE' (unit condition met) or 'ARCHETYPE_CONTEXTUAL' (cluster context)"
+    )
+    eligibility_rule: str = Field(..., description="Boolean formula evaluated on unit indicators")
+    supporting_evidence: Dict[str, Any] = Field(
+        ..., description="Actual observed column values for this specific unit justifying the advisory"
+    )
+
+
+class DecisionSupportEvaluation(BaseModel):
+    """Complete decision-support evaluation for an administrative unit."""
+
+    # 1. Geographic and Administrative Identification
+    shrid2: str = Field(..., description="Canonical SHRUG primary identifier")
+    pc11_id: str = Field(..., description="Census of India 2011 identifier")
+    village_name: str = Field(..., description="Official revenue village or town name")
+    district_name: str = Field(..., description="Dakshina Kannada, Udupi, or Uttara Kannada")
+    subdistrict_name: str = Field(..., description="Taluk / Subdistrict name")
+    unit_type: Optional[str] = Field(None, description="VILLAGE, TOWN, or None (1,257 nulls in UK)")
+    lat: float = Field(..., description="Representative point latitude (WGS84)")
+    lon: float = Field(..., description="Representative point longitude (WGS84)")
+
+    # 2. Lens 1: Deterministic AHP Preparedness Baseline
+    preparedness_score: float = Field(..., ge=0.0, le=100.0, description="Deterministic AHP index [0.0 - 100.0]")
+    preparedness_tier: str = Field(..., description="Deterministic AHP baseline tier: Low, Medium, or High")
+    domain_scores: Dict[str, float] = Field(
+        ...,
+        description="AHP standardized domain scores: score_medical, score_shelters, score_infrastructure, score_early_warning, score_socioeconomic",
+    )
+
+    # 3. Lens 2: Statistical Classification Stability (Multinomial Logistic Regression)
+    predicted_preparedness_tier: str = Field(..., description="Model-predicted tier (Logistic Regression)")
+    class_probabilities: Dict[str, float] = Field(
+        ..., description="Uncalibrated probabilities: prob_low, prob_medium, prob_high"
+    )
+    max_class_probability: float = Field(..., ge=0.3333, le=1.0, description="Highest class probability")
+    probability_margin: float = Field(..., ge=0.0, le=1.0, description="Margin: highest minus second-highest class")
+    prediction_provenance: str = Field(
+        ..., description="Data split: TRAIN_IN_SAMPLE (1,315), VAL_OUT_OF_SAMPLE (282), or TEST_OUT_OF_SAMPLE (282)"
+    )
+    model_agreement_status: str = Field(
+        ..., description="FULL_AGREEMENT (1,792) or BORDERLINE_DISAGREEMENT (87)"
+    )
+    is_boundary_case: bool = Field(
+        ..., description="True if probability_margin < 0.10 or max_class_probability < 0.60 (provisional flag)"
+    )
+
+    # 4. Lens 3: Spatial Vulnerability Clustering (K-Means)
+    vulnerability_archetype_id: Optional[int] = Field(None, description="0, 1, 2, 3, or None (1,257 nulls in UK)")
+    vulnerability_archetype_label: Optional[str] = Field(None, description="Archetype label or None (1,257 nulls in UK)")
+    cluster_assignment_status: str = Field(
+        ..., description="'ASSIGNED' (DK & Udupi, N=622) or 'UNASSIGNED_OUT_OF_STUDY_AREA' (UK, N=1,257)"
+    )
+
+    # 5. Synthesized Decision Support Outputs
+    provisional_priority_band: str = Field(
+        ..., description="BAND_1_CRITICAL, BAND_2_SPECIALIZED, BAND_3_MODERATE, or BAND_4_ADEQUATE"
+    )
+    band_rank: int = Field(..., ge=1, le=1879, description="Within-band deterministic rank (1 = highest priority)")
+    overall_priority_rank: int = Field(
+        ..., ge=1, le=1879, description="Overall deterministic priority rank (1 = highest intervention priority)"
+    )
+    priority_explanation: str = Field(..., description="Transparent textual synthesis of priority factors")
+    recommended_advisories: List[InterventionItem] = Field(..., description="List of evidence-grounded advisories")
+
+    # 6. Data Integrity and Advisory Planning Disclaimers
+    has_unverified_indicators: bool = Field(False, description="True if any required indicator was null/missing")
+    advisory_disclaimer: str = Field(
+        ..., description="Advisory disclaimer reinforcing decision-support nature of recommendations"
+    )
+
+
+class RegionalDecisionSummaryResponse(BaseModel):
+    """Regional summary of operational priority bands, trigger counts, and model agreement."""
+
+    total_units: int = Field(1879, description="Total administrative units in regional coverage")
+    band_counts: Dict[str, int] = Field(..., description="Count of units per priority band")
+    district_band_breakdown: Dict[str, Dict[str, int]] = Field(..., description="Priority bands by district")
+    model_agreement_counts: Dict[str, int] = Field(..., description="FULL_AGREEMENT vs BORDERLINE_DISAGREEMENT")
+    provenance_agreement: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="Agreement metrics separated by train (in-sample) vs validation/test (out-of-sample) splits",
+    )
+    uttara_kannada_trigger_breakdown: Dict[str, int] = Field(..., description="Trigger counts for unassigned UK units")
+    methodological_disclaimer: str = Field(..., description="Methodological disclaimer on advisory planning nature")
+
+
+class DecisionEvaluationListResponse(BaseModel):
+    """Paginated list of decision-support evaluations."""
+
+    total_evaluated: int = Field(..., description="Total units evaluated in dataset (1,879)")
+    total_matching: int = Field(..., description="Total units matching query filters")
+    limit: int = Field(..., description="Page size limit")
+    offset: int = Field(..., description="Offset index")
+    units: List[DecisionSupportEvaluation] = Field(..., description="Matching evaluated units")
+
